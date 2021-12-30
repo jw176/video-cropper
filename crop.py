@@ -102,6 +102,9 @@ if __name__ == '__main__':
     parser.add_argument('input', type=str, help="The input video file")
     parser.add_argument('-o', '--output', type=str, help="The output cropped video file name")
     parser.add_argument('-f', '--frame', default=0, type=int, help="The reference frame to show when cropping")
+    parser.add_argument('-c', '--crop-values', nargs=4, type=int, metavar=('left', 'right', 'top', 'bottom'),
+                        help="The specific pixel values for the bounding rectangle to crop. Values relative to top left"
+                             " origin of the source image. E.g, 300 1500 150 800")
 
     args = parser.parse_args()
 
@@ -112,57 +115,65 @@ if __name__ == '__main__':
         filename, extension = input_video.split(".")
         output_file = filename + "_cropped." + extension
 
-    user32 = ctypes.windll.user32
-    screen_size = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
-    window_size = round(screen_size[0] * 0.8), round(screen_size[1] * 0.8)
+    if not args.crop_values:
+        user32 = ctypes.windll.user32
+        screen_size = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+        window_size = round(screen_size[0] * 0.8), round(screen_size[1] * 0.8)
+
+        cap = cv2.VideoCapture(input_video)
+        FPS = cap.get(cv2.CAP_PROP_FPS)
+        FRAME_COUNT = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        WIDTH = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        HEIGHT = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        if not cap.isOpened():
+            raise ValueError()
+
+        X_SCALE = WIDTH / window_size[0]
+        Y_SCALE = HEIGHT / window_size[1]
+        SCALE = max(X_SCALE, Y_SCALE)
+
+        index = 0
+        crop_frame_index = args.frame
+        frame_to_crop = None
+        while cap.isOpened():
+            ret, frame = cap.read()
+
+            if ret:
+                if index == crop_frame_index:
+                    frame_resized = cv2.resize(frame, (int(WIDTH / SCALE), int(HEIGHT / SCALE)))
+                    frame_to_crop = frame_resized
+                    break
+
+                if cv2.waitKey(0) & 0xFF == ord('q'):
+                    break
+            else:
+                break
+
+            index += 1
+
+        cap.release()
+        cv2.destroyAllWindows()
+
+        cv2.imshow("Video", frame_to_crop)
+        dimensions = crop(frame_to_crop, SCALE)
+        if dimensions is None:
+            exit()
+
+        for i, val in enumerate(dimensions):
+            dimensions[i] *= SCALE
+            dimensions[i] = round(dimensions[i])
+
+        left, right, top, bottom = dimensions
+    else:
+        left, right, top, bottom = args.crop_values
+
+    print(f"{left=}, {right=}, {top=}, {bottom=}")
 
     cap = cv2.VideoCapture(input_video)
     FPS = cap.get(cv2.CAP_PROP_FPS)
     FRAME_COUNT = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     WIDTH = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     HEIGHT = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    if not cap.isOpened():
-        raise ValueError()
-
-    X_SCALE = WIDTH / window_size[0]
-    Y_SCALE = HEIGHT / window_size[1]
-    SCALE = max(X_SCALE, Y_SCALE)
-
-    index = 0
-    crop_frame_index = args.frame
-    frame_to_crop = None
-    while cap.isOpened():
-        ret, frame = cap.read()
-
-        if ret:
-            if index == crop_frame_index:
-                frame_resized = cv2.resize(frame, (int(WIDTH / SCALE), int(HEIGHT / SCALE)))
-                frame_to_crop = frame_resized
-                break
-
-            if cv2.waitKey(0) & 0xFF == ord('q'):
-                break
-        else:
-            break
-
-        index += 1
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-    cv2.imshow("Video", frame_to_crop)
-    dimensions = crop(frame_to_crop, SCALE)
-    if dimensions is None:
-        exit()
-
-    for i, val in enumerate(dimensions):
-        dimensions[i] *= SCALE
-        dimensions[i] = round(dimensions[i])
-
-    left, right, top, bottom = dimensions
-    print(f"{left=}, {right=}, {top=}, {bottom=}")
-
-    cap = cv2.VideoCapture(input_video)
     if not cap.isOpened():
         raise ValueError()
 

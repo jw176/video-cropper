@@ -1,17 +1,19 @@
-# video-cropper
+# :movie_camera: video-cropper
 A simple python script to crop (not trim) a video
+
+![](crop_demo.gif)
 
 ## Installation
 
 Clone the github repository and then run the following command in the root directory to install the python dependencies.
 
-```bash
+```
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-```bash
+```
 usage: crop.py [-h] [-o OUTPUT] [-f FRAME] [-c left right top bottom] input
 
 positional arguments:

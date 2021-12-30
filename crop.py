@@ -99,7 +99,7 @@ def crop(image, img_scale):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', required=True, type=str, help="The input video file")
+    parser.add_argument('input', type=str, help="The input video file")
     parser.add_argument('-o', '--output', type=str, help="The output cropped video file name")
     parser.add_argument('-f', '--frame', default=0, type=int, help="The reference frame to show when cropping")
 
@@ -190,3 +190,5 @@ if __name__ == '__main__':
     cap.release()
     out.release()
     cv2.destroyAllWindows()
+
+    print(f"Cropped video created: {output_file}")

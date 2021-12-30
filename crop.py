@@ -4,13 +4,19 @@ import ctypes
 from tqdm import tqdm
 
 
-def crop(image):
+def crop(image, img_scale):
     original_image = image.copy()
 
     ref_point = []
 
+    def scale(val):
+        nonlocal img_scale
+        return int(val * img_scale)
+
     def select_rect(event, x, y, flags, param):
         nonlocal ref_point, image
+
+        image = original_image.copy()
 
         if event == cv2.EVENT_LBUTTONDOWN:
             ref_point = [(x, y)]
@@ -19,14 +25,45 @@ def crop(image):
             ref_point.append((x, y))
 
         if ref_point:
-            image = original_image.copy()
 
             if len(ref_point) == 1:
-                image = cv2.rectangle(image, ref_point[0], (x, y), (0, 255, 0), 1)
-            elif len(ref_point) == 2:
-                image = cv2.rectangle(image, ref_point[0], ref_point[1], (0, 255, 0), 1)
+                second_point = (x, y)
+            else:
+                second_point = ref_point[1]
 
-            cv2.imshow("Video", image)
+            image = cv2.rectangle(image, ref_point[0], second_point, (0, 255, 0), 1)
+
+            img_height, img_width, _ = image.shape
+
+            # draw distances to the edge
+            x_values = [ref_point[0][0], second_point[0]]
+            y_values = [ref_point[0][1], second_point[1]]
+            x_values.sort()
+            y_values.sort()
+            mid_x = sum(x_values) // 2
+            mid_y = sum(y_values) // 2
+            image = cv2.line(image, (0, mid_y), (x_values[0], mid_y), (255, 255, 255), 1)
+            image = cv2.line(image, (img_width, mid_y), (x_values[1], mid_y), (255, 255, 255), 1)
+            image = cv2.line(image, (mid_x, 0), (mid_x, y_values[0]), (255, 255, 255), 1)
+            image = cv2.line(image, (mid_x, img_height), (mid_x, y_values[1]), (255, 255, 255), 1)
+
+            cv2.putText(image, f"{scale(x_values[0])}px", ((0 + x_values[0]) // 2, mid_y + 20), cv2.FONT_HERSHEY_PLAIN, 0.9,
+                        (255, 255, 255))
+            cv2.putText(image, f"{scale(img_width - x_values[1])}px", ((x_values[1] + img_width) // 2, mid_y + 20), cv2.FONT_HERSHEY_PLAIN, 0.9,
+                        (255, 255, 255))
+            cv2.putText(image, f"{scale(y_values[0])}px", (mid_x + 10, (0 + y_values[0]) // 2), cv2.FONT_HERSHEY_PLAIN, 0.9,
+                        (255, 255, 255))
+            cv2.putText(image, f"{scale(img_height - y_values[1])}px", (mid_x + 10, (img_height + y_values[1]) // 2), cv2.FONT_HERSHEY_PLAIN, 0.9,
+                        (255, 255, 255))
+
+            # draw width and height of the rectangle
+            rect_width = x_values[1] - x_values[0]
+            rect_height = y_values[1] - y_values[0]
+
+        image = cv2.putText(image, f"x:{scale(x)}px", (x - 20, y + 25), cv2.FONT_HERSHEY_PLAIN, 0.9, (255, 255, 255))
+        image = cv2.putText(image, f"y:{scale(y)}px", (x - 20, y + 40), cv2.FONT_HERSHEY_PLAIN, 0.9, (255, 255, 255))
+
+        cv2.imshow("Video", image)
 
         return ref_point
 
@@ -39,6 +76,10 @@ def crop(image):
         if key == ord("r"):
             image = original_image.copy()
             ref_point = []
+
+        if key == ord("q") or key == 27:  # ESC
+            ref_point = []
+            break
 
         elif key == 13:  # ENTER
             break
@@ -58,15 +99,18 @@ def crop(image):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input', required=True, type=str, help="The input video file")
+    parser.add_argument('-o', '--output', type=str, help="The output cropped video file name")
+    parser.add_argument('-f', '--frame', default=0, type=int, help="The reference frame to show when cropping")
 
-    # input video
-    # crop dimensions optional
-    # output file name
-    # optional frame number to show when cropping
+    args = parser.parse_args()
 
-    # get the first frame (or selected frame) of the video
-    input_video = '1.mp4'
-    output_file = '1-cropped.avi'
+    input_video = args.input
+    if args.output:
+        output_file = args.output
+    else:
+        filename, extension = input_video.split(".")
+        output_file = filename + "_cropped." + extension
 
     user32 = ctypes.windll.user32
     screen_size = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
@@ -82,16 +126,17 @@ if __name__ == '__main__':
 
     X_SCALE = WIDTH / window_size[0]
     Y_SCALE = HEIGHT / window_size[1]
+    SCALE = max(X_SCALE, Y_SCALE)
 
     index = 0
-    crop_frame_index = 0
+    crop_frame_index = args.frame
     frame_to_crop = None
     while cap.isOpened():
         ret, frame = cap.read()
 
         if ret:
             if index == crop_frame_index:
-                frame_resized = cv2.resize(frame, window_size)
+                frame_resized = cv2.resize(frame, (int(WIDTH / SCALE), int(HEIGHT / SCALE)))
                 frame_to_crop = frame_resized
                 break
 
@@ -106,12 +151,12 @@ if __name__ == '__main__':
     cv2.destroyAllWindows()
 
     cv2.imshow("Video", frame_to_crop)
-    dimensions = crop(frame_to_crop)
+    dimensions = crop(frame_to_crop, SCALE)
     if dimensions is None:
         exit()
 
     for i, val in enumerate(dimensions):
-        dimensions[i] *= X_SCALE if i < 2 else Y_SCALE
+        dimensions[i] *= SCALE
         dimensions[i] = round(dimensions[i])
 
     left, right, top, bottom = dimensions

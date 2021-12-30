@@ -112,7 +112,7 @@ if __name__ == '__main__':
     if args.output:
         output_file = args.output
     else:
-        filename, extension = input_video.split(".")
+        filename, extension = ".".join(input_video.split(".")[:-1]), input_video.split(".")[-1]
         output_file = filename + "_cropped." + extension
 
     if not args.crop_values:
